@@ -1,0 +1,119 @@
+import psutil
+import time
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from datetime import datetime
+import argparse
+import logging
+from plyer import notification  # For desktop alerts (install with pip install plyer)
+
+# Configure logging
+logging.basicConfig(
+    filename='cpu_usage.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(message)s'
+)
+
+# Global variables for live plotting
+timestamps = []
+cpu_percentages = []
+MAX_DATA_POINTS = 50  # Limit data points for smoother plotting
+
+def monitor_cpu(interval=1, alert_threshold=80):
+    """Monitor CPU usage in real-time with logging and alerts."""
+    print(f"🚀 Starting CPU Monitor (Refresh Interval: {interval}s, Alert Threshold: {alert_threshold}%)")
+    print("Press Ctrl+C to stop...\n")
+
+    try:
+        while True:
+            # Get CPU usage
+            cpu_usage = psutil.cpu_percent(interval=interval)
+            current_time = datetime.now().strftime("%H:%M:%S")
+
+            # Log data
+            logging.info(f"CPU Usage: {cpu_usage}%")
+            print(f"[{current_time}] CPU Usage: {cpu_usage}%")
+
+            # Check for threshold breach
+            if cpu_usage > alert_threshold:
+                send_alert(cpu_usage, alert_threshold)
+
+            # Store data for plotting
+            update_plot_data(current_time, cpu_usage)
+
+    except KeyboardInterrupt:
+        print("\n🛑 Monitoring stopped.")
+        generate_report()
+
+def send_alert(cpu_usage, threshold):
+    """Send a desktop notification if CPU exceeds threshold."""
+    notification.notify(
+        title="⚠ High CPU Usage Alert!",
+        message=f"CPU usage is {cpu_usage}% (Threshold: {threshold}%)",
+        timeout=5
+    )
+
+def update_plot_data(timestamp, cpu_usage):
+    """Update data for live plotting."""
+    timestamps.append(timestamp)
+    cpu_percentages.append(cpu_usage)
+
+    # Keep only the last MAX_DATA_POINTS entries
+    if len(timestamps) > MAX_DATA_POINTS:
+        timestamps.pop(0)
+        cpu_percentages.pop(0)
+
+def animate_plot(i):
+    """Update the live plot (called by matplotlib's animation)."""
+    plt.clf()  # Clear previous frame
+    plt.plot(timestamps, cpu_percentages, marker='o', linestyle='-', color='b')
+    plt.title('📊 Real-Time CPU Usage (%)')
+    plt.xlabel('Time')
+    plt.ylabel('CPU Usage (%)')
+    plt.xticks(rotation=45)
+    plt.grid(True)
+    plt.tight_layout()
+
+def generate_report():
+    """Generate a summary report at the end."""
+    avg_cpu = sum(cpu_percentages) / len(cpu_percentages) if cpu_percentages else 0
+    max_cpu = max(cpu_percentages) if cpu_percentages else 0
+
+    print("\n📊 Final Report:")
+    print(f"  - Avg CPU Usage: {avg_cpu:.2f}%")
+    print(f"  - Max CPU Usage: {max_cpu:.2f}%")
+    print(f"  - Data Logged: 'cpu_usage.log'")
+
+def main():
+    parser = argparse.ArgumentParser(description="Advanced CPU Monitoring Tool")
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=1,
+        help="Refresh interval in seconds (default: 1)"
+    )
+    parser.add_argument(
+        "--threshold",
+        type=int,
+        default=80,
+        help="Alert threshold percentage (default: 80)"
+    )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Enable live plotting"
+    )
+    args = parser.parse_args()
+
+    # Start live plot if enabled
+    if args.plot:
+        print("📈 Live plotting enabled. Close the graph window to stop monitoring.")
+        fig = plt.figure(figsize=(10, 5))
+        ani = animation.FuncAnimation(fig, animate_plot, interval=args.interval * 1000)
+        plt.show(block=False)
+
+    # Start monitoring
+    monitor_cpu(args.interval, args.threshold)
+
+if _name_ == "_main_":
+    main()
